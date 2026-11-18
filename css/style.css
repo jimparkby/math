@@ -198,6 +198,7 @@ table { border-collapse: collapse; width: 100%; }
 #tutSvg .node.upd circle { stroke: #1f6feb; stroke-width: 3; }
 #tutSvg .node text { font-size: 15px; font-weight: 700; text-anchor: middle; dominant-baseline: central; }
 #tutSvg .lbl { font-size: 12px; fill: #1f6feb; font-weight: 700; text-anchor: middle; }
+.tut-table th, .tut-table td, .tut-table th:first-child, .tut-table td:first-child { text-align: center; }
 .tut-table td.cur { background: #ffe2c2; font-weight: 700; }
 .tut-table td.done { color: var(--muted); }
 .tut-table td.upd { color: var(--accent); font-weight: 700; }
