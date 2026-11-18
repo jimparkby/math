@@ -1,0 +1,1 @@
+[out:json][timeout:300];way["highway"~"^(motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|unclassified|residential|living_street)$"](53.835,27.405,53.975,27.705);(._;>;);out body qt;

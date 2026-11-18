@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GeoPath — кратчайшие пути на графе дорог Минска</title>
+  <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/v3.9.4/mapbox-gl.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <aside id="panel">
+    <header class="brand">
+      <div>
+        <h1>GeoPath</h1>
+        <p class="sub">Поиск оптимальных маршрутов на графе дорожной сети Минска</p>
+      </div>
+      <button id="btnToken" class="icon-btn" title="Токен Mapbox">⚙</button>
+    </header>
+
+    <div id="status" class="status" hidden></div>
+
+    <!-- ============ Маршрут ============ -->
+    <section class="card" id="secRoute">
+      <h2>Маршрут</h2>
+      <div class="od">
+        <div class="od-fields">
+          <label class="field">
+            <span class="dot dot-a">A</span>
+            <input id="inFrom" type="text" placeholder="Откуда: адрес, место или клик по карте" autocomplete="off">
+            <ul class="suggest" id="sugFrom" hidden></ul>
+          </label>
+          <label class="field">
+            <span class="dot dot-b">B</span>
+            <input id="inTo" type="text" placeholder="Куда" autocomplete="off">
+            <ul class="suggest" id="sugTo" hidden></ul>
+          </label>
+        </div>
+        <button id="btnSwap" class="icon-btn swap" title="Поменять местами">⇅</button>
+      </div>
+      <div class="scenarios" id="scenarios"></div>
+      <div class="seg" role="radiogroup" aria-label="Критерий">
+        <label><input type="radio" name="crit" value="dist" checked><span>Минимальное расстояние</span></label>
+        <label><input type="radio" name="crit" value="time"><span>Минимальное время</span></label>
+      </div>
+      <button id="btnRoute" class="btn primary wide">Построить маршрут</button>
+    </section>
+
+    <!-- ============ Результат ============ -->
+    <section class="card" id="secResult" hidden>
+      <h2>Результат</h2>
+      <div class="kpis">
+        <div class="kpi"><div class="kpi-v" id="resKm">—</div><div class="kpi-l">длина маршрута</div></div>
+        <div class="kpi"><div class="kpi-v" id="resMin">—</div><div class="kpi-l">расчётное время поездки</div></div>
+      </div>
+      <p id="resAlt" class="alt-note"></p>
+      <p class="legend">
+        <span class="lg lg-main"></span><span id="lgMain">оптимальный маршрут</span>
+        <span class="lg lg-alt"></span><span id="lgAlt">оптимум по второму критерию</span>
+      </p>
+      <p id="resSnap" class="muted small"></p>
+      <p id="resExternal" class="muted small"></p>
+    </section>
+
+    <!-- ============ Математическая модель ============ -->
+    <section class="card" id="secModel">
+      <h2>Математическая модель</h2>
+      <div class="formula">
+        <div><i>G</i> = (<i>V</i>, <i>E</i>, <i>w</i>),&nbsp;&nbsp; <i>w</i> : <i>E</i> → ℝ<sub>≥0</sub></div>
+        <div><i>L</i>(<i>P</i>) = <span class="sum">Σ</span><sub><i>e</i>∈<i>P</i></sub> <i>w</i>(<i>e</i>) → min,&nbsp;&nbsp; <i>P</i>* = arg min <i>L</i>(<i>P</i>)</div>
+        <div class="small">релаксация: <i>d</i>(<i>v</i>) = min( <i>d</i>(<i>v</i>), <i>d</i>(<i>u</i>) + <i>w</i>(<i>u</i>,<i>v</i>) )</div>
+      </div>
+      <table class="kv" id="modelStats"></table>
+
+      <h3>Сравнение алгоритмов</h3>
+      <div class="table-wrap">
+        <table class="cmp" id="cmpTable">
+          <thead><tr><th>Показатель</th><th>Дейкстра</th><th>A*</th><th>Двунапр. Дейкстра</th><th>Беллман — Форд</th></tr></thead>
+          <tbody><tr><td colspan="5" class="muted">Постройте маршрут, чтобы заполнить таблицу.</td></tr></tbody>
+        </table>
+      </div>
+      <p class="note">Время вычисления — работа алгоритма в браузере, а не время поездки. Замер: серии запусков ≥ 30 мс, медиана по 5 сериям, после прогрева.</p>
+
+      <h3>Флойд — Уоршелл: граница применимости</h3>
+      <div id="fwInfo" class="small"></div>
+      <button id="btnFW" class="btn small">Запустить на подграфе (r = 500 м, ≤ 400 вершин)</button>
+      <div id="fwResult" class="small"></div>
+    </section>
+
+    <!-- ============ Демонстрация ============ -->
+    <section class="card" id="secDemo">
+      <h2>Демонстрация</h2>
+      <div class="row wrap">
+        <button id="btnAnim" class="btn">▶ Анимация поиска</button>
+        <select id="animMode" title="Режим анимации">
+          <option value="both">Дейкстра и A* одновременно</option>
+          <option value="seq">Поочерёдно</option>
+        </select>
+      </div>
+      <div id="animCounter" class="anim-counter" hidden></div>
+      <div class="row wrap">
+        <button id="btnGraph" class="btn">Показать граф</button>
+        <button id="btnClear" class="btn">Очистить</button>
+        <button id="btnTutorial" class="btn">Учебный пример</button>
+      </div>
+      <div class="row wrap">
+        <button id="btnExternal" class="btn ghost small" title="Необязательная внешняя сверка длины маршрута">Сверка с внешним сервисом (Mapbox Directions)</button>
+      </div>
+    </section>
+
+    <!-- ============ Эксперимент ============ -->
+    <section class="card" id="secExp">
+      <h2>Вычислительный эксперимент</h2>
+      <div class="row wrap">
+        <label class="inline">Число пар <input id="expPairs" type="number" min="10" max="2000" value="100"></label>
+        <select id="expCrit">
+          <option value="dist">по расстоянию</option>
+          <option value="time">по времени</option>
+        </select>
+        <button id="btnExp" class="btn primary">Запустить</button>
+      </div>
+      <div class="progress" id="expProgress" hidden><div class="bar"></div><span></span></div>
+      <div id="expOut"></div>
+    </section>
+
+    <!-- ============ Самопроверка ============ -->
+    <section class="card" id="secTest">
+      <h2>Самопроверка</h2>
+      <p class="small muted">Граф статьи (A–C–F–E = 20), сверка с NetworkX, взаимная сверка алгоритмов, упрощение, свойства A*, Флойд — Уоршелл, отрицательный вес.</p>
+      <button id="btnTest" class="btn">Запустить самопроверку</button>
+      <div class="progress" id="testProgress" hidden><div class="bar"></div><span></span></div>
+      <ul id="testOut" class="checks"></ul>
+    </section>
+
+    <!-- ============ Данные ============ -->
+    <section class="card" id="secData">
+      <h2>Данные</h2>
+      <div id="dataInfo" class="small"></div>
+      <div class="row wrap">
+        <select id="osmArea">
+          <option value="minsk">Рамка Минска</option>
+          <option value="view">Видимая область карты</option>
+        </select>
+        <button id="btnOSM" class="btn small">Обновить данные из OSM</button>
+        <button id="btnSnapshot" class="btn ghost small" hidden>Вернуть снимок</button>
+      </div>
+    </section>
+
+    <!-- ============ Как это работает ============ -->
+    <details class="card how">
+      <summary>Как это работает</summary>
+      <ol>
+        <li><b>Данные.</b> Линии OpenStreetMap с тегом <code>highway</code> (автомобильные классы) загружаются через Overpass API. Исключаются <code>access=no|private</code>, <code>motor_vehicle=no|private</code>, <code>area=yes</code>.</li>
+        <li><b>Граф.</b> Ориентированный взвешенный граф <i>G</i> = (<i>V</i>, <i>E</i>, <i>w</i>): двусторонняя улица даёт две противоположные дуги, односторонняя (<code>oneway</code>, кольца, магистрали) — одну.</li>
+        <li><b>Веса.</b> Расстояние — сумма длин отрезков по формуле гаверсинусов (<i>R</i> = 6 371 008,8 м). Время <i>t</i> = <i>d</i> / <i>v</i>, где <i>v</i> — <code>maxspeed</code> (≤ 110 км/ч) или типовая скорость класса дороги. Все веса проверяются на неотрицательность — условие применимости алгоритма Дейкстры.</li>
+        <li><b>Упрощение.</b> Узлы, лишь задающие форму улицы (одна дуга входит, одна выходит, свойства одинаковы), удаляются, дуги сливаются, веса складываются. Длины кратчайших путей не меняются (проверено тестом).</li>
+        <li><b>Связность.</b> Алгоритмом Тарьяна (итеративно) находится наибольшая компонента сильной связности; точки пользователя привязываются к ближайшей её вершине.</li>
+        <li><b>Хранение.</b> Список смежности в формате CSR: (|<i>V</i>|+1)·4 + |<i>E</i>|·20 байт вместо |<i>V</i>|²·8 байт у матрицы.</li>
+        <li><b>Поиск.</b> Дейкстра на двоичной куче — O((|<i>V</i>|+|<i>E</i>|) log |<i>V</i>|); A* с географической эвристикой; двунаправленная Дейкстра; Беллман — Форд O(|<i>V</i>|·|<i>E</i>|); Флойд — Уоршелл O(|<i>V</i>|³) — только на подграфе.</li>
+      </ol>
+      <h3>Почему A* находит оптимальный путь</h3>
+      <p><b>Эвристика.</b> Для критерия «расстояние» <i>h</i>(<i>v</i>) = hav(<i>v</i>, <i>t</i>), для «времени» <i>h</i>(<i>v</i>) = hav(<i>v</i>, <i>t</i>) / <i>v</i><sub>max</sub>, где <i>v</i><sub>max</sub> — максимальная скорость среди дуг графа.</p>
+      <p><b>Допустимость:</b> <i>h</i>(<i>v</i>) ≤ истинной оставшейся стоимости, потому что дорога не короче дуги большого круга, а ехать быстрее <i>v</i><sub>max</sub> нельзя. Следовательно, A* находит оптимальный путь.</p>
+      <p><b>Согласованность:</b> <i>h</i>(<i>u</i>) ≤ <i>w</i>(<i>u</i>,<i>v</i>) + <i>h</i>(<i>v</i>) по неравенству треугольника. Поэтому каждая вершина обрабатывается не более одного раза, и A* обрабатывает подмножество вершин, которые обрабатывает алгоритм Дейкстры.</p>
+      <p><b>Связь алгоритмов:</b> алгоритм Дейкстры — частный случай A* при <i>h</i> ≡ 0; в коде это одна функция с параметром эвристики.</p>
+    </details>
+
+    <footer class="foot">
+      Карта © <a href="https://www.mapbox.com/about/maps/" target="_blank" rel="noopener">Mapbox</a> ·
+      Данные дорожной сети © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">участники OpenStreetMap</a>, ODbL ·
+      БНТУ, 2026
+    </footer>
+  </aside>
+
+  <main id="mapWrap">
+    <div id="map"></div>
+    <div id="mapFallback" class="map-fallback" hidden>
+      <div>
+        <h3>Карта недоступна</h3>
+        <p id="mapFallbackText"></p>
+        <p class="small">Математическая часть работает без карты: эксперимент, самопроверка, учебный пример и построение маршрута по готовым сценариям.</p>
+        <button class="btn" id="btnFallbackToken">Ввести токен Mapbox</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Окно ввода токена -->
+<div class="modal" id="tokenModal" hidden>
+  <div class="modal-box">
+    <h3>Токен Mapbox</h3>
+    <p class="small">Для отображения карты нужен публичный токен Mapbox (начинается с <code>pk.</code>). Получить: <a href="https://account.mapbox.com/access-tokens/" target="_blank" rel="noopener">account.mapbox.com</a>. Токен сохраняется только в этом браузере.</p>
+    <input id="tokenInput" type="text" placeholder="pk.eyJ1Ijoi..." autocomplete="off" spellcheck="false">
+    <p id="tokenErr" class="err small" hidden></p>
+    <div class="row end">
+      <button class="btn ghost" id="tokenSkip">Продолжить без карты</button>
+      <button class="btn primary" id="tokenOk">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<!-- Учебный пример -->
+<div class="modal" id="tutModal" hidden>
+  <div class="modal-box wide">
+    <div class="row between">
+      <h3>Учебный пример: алгоритм Дейкстры (рисунок 1, таблица 2 статьи)</h3>
+      <button class="icon-btn" id="tutClose" title="Закрыть">✕</button>
+    </div>
+    <div class="tut">
+      <svg id="tutSvg" viewBox="0 0 460 330" role="img" aria-label="Граф из статьи"></svg>
+      <div class="tut-side">
+        <p id="tutText" class="tut-text"></p>
+        <div class="row wrap">
+          <button class="btn small" id="tutPrev">← Назад</button>
+          <button class="btn small primary" id="tutNext">Шаг →</button>
+          <button class="btn small" id="tutPlay">▶ Авто</button>
+          <button class="btn small ghost" id="tutReset">Сброс</button>
+        </div>
+      </div>
+    </div>
+    <div class="table-wrap"><table class="cmp tut-table" id="tutTable"></table></div>
+  </div>
+</div>
+
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.9.4/mapbox-gl.js"></script>
+<script src="js/config.js"></script>
+<script src="js/geo.js"></script>
+<script src="js/heap.js"></script>
+<script src="js/graph.js"></script>
+<script src="js/algorithms.js"></script>
+<script src="js/experiment.js"></script>
+<script src="js/selftest.js"></script>
+<script src="data/minsk-graph.js"></script>
+<script src="data/reference.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
