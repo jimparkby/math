@@ -1,3 +1,4 @@
 data/raw/tmp.json
 __pycache__/
 .vercel
+js/token.js

@@ -9,7 +9,8 @@
   const config = {
     // Публичный токен Mapbox (pk....). Если пусто — при старте будет предложено ввести его,
     // введённый токен сохраняется в localStorage браузера.
-    MAPBOX_TOKEN: '',
+    // Берётся из js/token.js (не хранится в git; на Vercel создаётся из переменной MAPBOX_TOKEN).
+    MAPBOX_TOKEN: (typeof window !== 'undefined' && window.GEOPATH_MAPBOX_TOKEN) || '',
 
     MAP_STYLE: 'mapbox://styles/mapbox/light-v11',
 
